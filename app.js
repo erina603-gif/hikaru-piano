@@ -1,294 +1,190 @@
 "use strict";
-
-// 曲はここに追加できます。notes は鍵盤名、durations は各音の長さ（秒）です。
-const SONGS = [
-  {
-    id: "morning-hop",
-    title: "おひさまジャンプ",
-    difficulty: "かんたん",
-    icon: "☀️",
-    stars: 1,
-    notes: ["C4", "D4", "E4", "G4", "E4", "D4", "C4", "G4"],
-    durations: [0.45, 0.45, 0.45, 0.7, 0.45, 0.45, 0.6, 0.9]
-  },
-  {
-    id: "cloud-walk",
-    title: "くもの おさんぽ",
-    difficulty: "ふつう",
-    icon: "☁️",
-    stars: 2,
-    notes: ["E4", "G4", "A4", "G4", "E4", "D4", "F4", "A4", "C5", "A4", "G4", "C5"],
-    durations: [0.4, 0.4, 0.6, 0.4, 0.4, 0.6, 0.4, 0.4, 0.65, 0.4, 0.5, 0.9]
-  },
-  {
-    id: "star-parade",
-    title: "ほしの パレード",
-    difficulty: "ちょっとむずかしい",
-    icon: "⭐",
-    stars: 3,
-    notes: ["C4", "E4", "G4", "B4", "C5", "D5", "E5", "G5", "F5", "D5", "B4", "G4", "A4", "B4", "C5", "C6"],
-    durations: [0.35, 0.35, 0.35, 0.45, 0.35, 0.35, 0.45, 0.65, 0.35, 0.35, 0.45, 0.5, 0.35, 0.35, 0.55, 1.0]
-  }
-];
-
-const NOTE_NAMES = ["C4", "C#4", "D4", "D#4", "E4", "F4", "F#4", "G4", "G#4", "A4", "A#4", "B4", "C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5", "G#5", "A5", "A#5", "B5", "C6"];
-const SOLFEGE = { C: "ド", D: "レ", E: "ミ", F: "ファ", G: "ソ", A: "ラ", B: "シ" };
-
-const ui = {
-  home: document.querySelector("#home-screen"),
-  game: document.querySelector("#game-screen"),
-  songList: document.querySelector("#song-list"),
-  songTitle: document.querySelector("#song-title"),
-  progressFill: document.querySelector("#progress-fill"),
-  progressText: document.querySelector("#progress-text"),
-  piano: document.querySelector("#piano"),
-  sparkles: document.querySelector("#sparkles"),
-  clearDialog: document.querySelector("#clear-dialog"),
-  back: document.querySelector("#back-button"),
-  sound: document.querySelector("#sound-button"),
-  retry: document.querySelector("#retry-button"),
-  songs: document.querySelector("#songs-button")
-};
-
-let currentSong = null;
-let noteIndex = 0;
-let muted = false;
-let completionTimer = 0;
-const keyElements = new Map();
-const activePointers = new Map();
-
-class PianoAudio {
-  constructor() {
-    this.context = null;
-    this.master = null;
-    this.sampleBuffers = new Map();
-  }
-
-  async unlock() {
-    if (!this.context) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return;
-      this.context = new AudioContextClass({ latencyHint: "interactive" });
-      this.master = this.context.createGain();
-      this.master.gain.value = 0.34;
-      this.master.connect(this.context.destination);
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ui = Object.fromEntries(["home-screen","game-screen","song-list","song-title","progress-fill","progress-text","piano","note-field","judgement","score","combo","clear-dialog","clear-result","sound-dialog","audio-status","audio-detail","sound-start","test-sound","reconnect","volume","mute","pause-button","countdown","update-notice"].map((id) => [id, $(id)]));
+  let song = null, round = null, running = false, elapsed = 0, origin = 0, frame = 0;
+  let speed = "slow", silent = false, demonstrated = false, tested = false, audioAction = 0;
+  const keyElements = new Map(), pointers = new Map();
+  let noteElements = [], feedbackUntil = 0, fieldHeight = 100;
+  const visible = (element, show) => { element.hidden = !show; };
+  const isPortrait = () => matchMedia("(orientation: portrait)").matches;
+  const audio = new PianoAudio((state) => {
+    ui["audio-detail"].textContent = `音声の状態: ${state}`;
+    if (state !== "running") {
+      tested = false; ui["sound-start"].disabled = true;
+      if (running && !silent) { pause(); showSound("音声が中断されました。おとをためして再開してね。"); }
     }
-    if (this.context.state === "suspended") await this.context.resume();
+  }, (error) => { ui["audio-status"].textContent = error.message; });
+
+  function showSound(message = "まずは おとを ためしてね") {
+    tested = false; ui["sound-start"].disabled = true;
+    ui["sound-start"].textContent = elapsed > 0 ? "きこえた！ つづける" : "きこえた！ スタート";
+    ui["audio-status"].textContent = message; visible(ui["sound-dialog"], true);
+    ui["test-sound"].focus({ preventScroll: true });
   }
-
-  frequency(note) {
-    const noteNumber = NOTE_NAMES.indexOf(note) + 60;
-    return 440 * Math.pow(2, (noteNumber - 69) / 12);
-  }
-
-  play(note, duration = 0.55) {
-    if (muted || !this.context || !this.master) return;
-    const now = this.context.currentTime;
-    const sample = this.sampleBuffers.get(note);
-
-    // 将来ピアノ音源を登録した場合は、合成音ではなくサンプルを再生します。
-    if (sample) {
-      const source = this.context.createBufferSource();
-      const gain = this.context.createGain();
-      source.buffer = sample;
-      gain.gain.setValueAtTime(0.72, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + Math.max(duration, 0.35) + 1.2);
-      source.connect(gain).connect(this.master);
-      source.start(now);
-      source.stop(now + Math.max(duration, 0.35) + 1.25);
-      return;
-    }
-
-    const frequency = this.frequency(note);
-    const voiceGain = this.context.createGain();
-    const filter = this.context.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(Math.min(5200, frequency * 9), now);
-    filter.frequency.exponentialRampToValueAtTime(Math.max(900, frequency * 2.4), now + 1.2);
-    voiceGain.gain.setValueAtTime(0.0001, now);
-    voiceGain.gain.exponentialRampToValueAtTime(0.48, now + 0.009);
-    voiceGain.gain.exponentialRampToValueAtTime(0.14, now + 0.18);
-    voiceGain.gain.exponentialRampToValueAtTime(0.001, now + Math.max(duration, 0.45) + 1.15);
-    filter.connect(voiceGain).connect(this.master);
-
-    [["triangle", 1, 0.55], ["sine", 2, 0.18], ["sine", 3, 0.06]].forEach(([type, ratio, level]) => {
-      const oscillator = this.context.createOscillator();
-      const partial = this.context.createGain();
-      oscillator.type = type;
-      oscillator.frequency.setValueAtTime(frequency * ratio, now);
-      oscillator.detune.setValueAtTime(ratio === 1 ? -2 : 2, now);
-      partial.gain.value = level;
-      oscillator.connect(partial).connect(filter);
-      oscillator.start(now);
-      oscillator.stop(now + Math.max(duration, 0.45) + 1.2);
+  function testSound(rebuild) {
+    const action = ++audioAction;
+    tested = false; ui["sound-start"].disabled = true;
+    ui["audio-status"].textContent = "おとを じゅんびしています…";
+    ui.mute.checked = false; silent = false;
+    if (Number(ui.volume.value) === 0) ui.volume.value = "65";
+    $("volume-value").textContent = `${ui.volume.value}%`;
+    audio.setVolume(Number(ui.volume.value) / 100);
+    // ユーザーのclick内から同期的に初期化・resumeする（iOS）。
+    audio.unlock(rebuild).then(() => {
+      if (action !== audioAction || ui["sound-dialog"].hidden) return;
+      audio.play("C5", 0.6); tested = true; ui["sound-start"].disabled = false;
+      ui["audio-status"].textContent = "♪ おとが きこえたら スタート！";
+      ui["audio-detail"].textContent = `再生処理OK / ${audio.context.state} / 音量 ${ui.volume.value}%`;
+    }).catch((error) => {
+      if (action !== audioAction) return;
+      ui["audio-status"].textContent = error.message;
+      ui["audio-detail"].textContent = `音声エラー: ${error.name || "Error"} / ${audio.context?.state || "未開始"}`;
     });
   }
-
-  async registerSample(note, url) {
-    await this.unlock();
-    const response = await fetch(url);
-    const data = await response.arrayBuffer();
-    this.sampleBuffers.set(note, await this.context.decodeAudioData(data));
+  function updateScore() {
+    ui.score.textContent = round.score; ui.combo.textContent = round.combo;
+    const done = round.events.filter((event) => event.result).length;
+    ui["progress-text"].textContent = `${done} / ${round.events.length}`;
+    ui["progress-fill"].style.width = `${done / round.events.length * 100}%`;
   }
-}
-
-const audio = new PianoAudio();
-
-function renderSongs() {
-  const fragment = document.createDocumentFragment();
-  SONGS.forEach((song) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "song-card";
-    button.dataset.songId = song.id;
-    button.innerHTML = `
-      <span class="song-icon" aria-hidden="true">${song.icon}</span>
-      <strong>${song.title}</strong>
-      <span class="difficulty">${song.difficulty}</span>
-      <span class="difficulty-stars" aria-label="むずかしさ ${song.stars}">${"★".repeat(song.stars)}${"☆".repeat(3 - song.stars)}</span>`;
-    button.addEventListener("click", () => startSong(song));
-    fragment.appendChild(button);
+  function feedback(result) {
+    ui.judgement.textContent = result === "PERFECT" ? "PERFECT ★" : result === "GOOD" ? "GOOD ♪" : "MISS · つぎへ！";
+    ui.judgement.dataset.result = result; feedbackUntil = performance.now() + 650; updateScore();
+  }
+  function pause() {
+    if (running) elapsed = (performance.now() - origin) / 1000;
+    running = false; cancelAnimationFrame(frame); audio.stopAll();
+    pointers.clear(); keyElements.forEach((key) => key.classList.remove("active", "next"));
+  }
+  function resume() {
+    if (!round || isPortrait() || document.hidden) return;
+    visible(ui["sound-dialog"], false);
+    origin = performance.now() - elapsed * 1000; running = true;
+    frame = requestAnimationFrame(tick);
+  }
+  function measure() { fieldHeight = Math.max(1, ui["note-field"].clientHeight - 18); }
+  function startSong(selected) {
+    pause(); audioAction++; song = selected; elapsed = 0;
+    round = new Rhythm.Round(song, speed); demonstrated = $("demo").checked;
+    ui["song-title"].textContent = `${song.title} · ${Rhythm.speeds[speed].label}`;
+    visible(ui["home-screen"], false); visible(ui["game-screen"], true); visible(ui["clear-dialog"], false);
+    ui["note-field"].replaceChildren();
+    noteElements = round.events.map((event) => {
+      const key = Rhythm.keys.find((item) => item.note === event.note);
+      const element = document.createElement("span");
+      element.className = `falling-note ${key.black ? "black-note" : ""}`; element.textContent = key.black ? "♯" : "♪";
+      element.style.left = `${key.center * 100}%`; element.style.width = `${key.width * (key.black ? 0.8 : 0.62) * 100}%`;
+      element.hidden = true; ui["note-field"].appendChild(element); return element;
+    });
+    ui.judgement.textContent = ""; ui.countdown.textContent = "";
+    measure(); updateScore(); showSound();
+  }
+  function finish() {
+    running = false; keyElements.forEach((key) => key.classList.remove("next"));
+    ui["clear-result"].textContent = `${round.score} てん · さいこう ${round.maxCombo} コンボ`;
+    $("result-counts").textContent = `PERFECT ${round.counts.PERFECT} / GOOD ${round.counts.GOOD} / MISS ${round.counts.MISS}`;
+    visible(ui["clear-dialog"], true); $("retry-button").focus({ preventScroll: true });
+  }
+  function tick(now) {
+    if (!running) return;
+    elapsed = (now - origin) / 1000;
+    if (round.expire(elapsed).length) feedback("MISS");
+    keyElements.forEach((key) => key.classList.remove("next"));
+    round.events.forEach((event, i) => {
+      if (demonstrated && !silent && !event.demoPlayed && elapsed >= event.at) {
+        event.demoPlayed = true;
+        if (elapsed - event.at < 0.2 && event.result !== "PERFECT" && event.result !== "GOOD") safePlay(event.note, event.duration);
+      }
+      const position = round.position(event, elapsed), element = noteElements[i];
+      element.hidden = !!event.result || position < 0 || position > 1 + round.config.good / round.config.fall;
+      element.style.top = `${position * fieldHeight}px`;
+      if (!event.result && Math.abs(event.at - elapsed) <= round.config.good) keyElements.get(event.note).classList.add("next");
+    });
+    ui.countdown.textContent = elapsed < round.events[0].at - 0.4 ? `${Math.ceil(round.events[0].at - elapsed)}` : "";
+    if (now > feedbackUntil) ui.judgement.textContent = "";
+    if (round.done) { finish(); return; }
+    if (running) frame = requestAnimationFrame(tick);
+  }
+  function safePlay(note, duration) {
+    if (silent) return;
+    try { audio.play(note, duration); }
+    catch (error) { audio.report(error); pause(); showSound(error.message); }
+  }
+  function press(note, time) {
+    if (!running) return;
+    const result = round.hit(note, time); feedback(result.result);
+    if (result.event && result.result !== "MISS") safePlay(note, result.event.duration);
+  }
+  for (const key of Rhythm.keys) {
+    const element = document.createElement("button");
+    element.type = "button"; element.className = `key ${key.black ? "black-key" : "white-key"}`;
+    element.style.left = `${key.left * 100}%`; element.style.width = `${key.width * 100}%`;
+    element.dataset.note = key.note; element.setAttribute("aria-label", key.note);
+    const release = (event) => { pointers.delete(event.pointerId); if (![...pointers.values()].includes(element)) element.classList.remove("active"); };
+    element.addEventListener("pointerdown", (event) => {
+      event.preventDefault(); if (!running || pointers.has(event.pointerId)) return;
+      // 音声の非同期処理より前にタップ時刻を確定。
+      const time = (performance.now() - origin) / 1000;
+      pointers.set(event.pointerId, element); element.classList.add("active");
+      try { element.setPointerCapture(event.pointerId); } catch (_) {}
+      press(key.note, time);
+    });
+    for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) element.addEventListener(name, release);
+    element.addEventListener("keydown", (event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); press(key.note, (performance.now() - origin) / 1000); } });
+    ui.piano.appendChild(element); keyElements.set(key.note, element);
+  }
+  for (const item of PIANO_SONGS) {
+    const button = document.createElement("button"); button.className = "song-card"; button.type = "button";
+    button.innerHTML = `<span class="song-icon" aria-hidden="true">${item.icon}</span><strong>${item.title}</strong><span class="difficulty">${item.difficulty} · ${item.notes.length}おん</span>`;
+    button.addEventListener("click", () => startSong(item)); ui["song-list"].appendChild(button);
+  }
+  function home() {
+    pause(); audioAction++; round = null;
+    for (const id of ["game-screen", "clear-dialog", "sound-dialog"]) visible(ui[id], false);
+    visible(ui["home-screen"], true);
+  }
+  $("back-button").addEventListener("click", home); $("songs-button").addEventListener("click", home); $("sound-back").addEventListener("click", home);
+  $("retry-button").addEventListener("click", () => startSong(song));
+  ui["test-sound"].addEventListener("click", () => testSound(false)); ui.reconnect.addEventListener("click", () => testSound(true));
+  ui.volume.addEventListener("input", () => {
+    audio.setVolume(Number(ui.volume.value) / 100); $("volume-value").textContent = `${ui.volume.value}%`;
+    if (+ui.volume.value === 0) { tested = false; ui["sound-start"].disabled = true; ui["audio-status"].textContent = "音量が0です。音量を上げてためしてね。"; }
   });
-  ui.songList.appendChild(fragment);
-}
-
-function renderPiano() {
-  let whiteIndex = 0;
-  NOTE_NAMES.forEach((note) => {
-    const isBlack = note.includes("#");
-    const key = document.createElement("button");
-    key.type = "button";
-    key.className = `key ${isBlack ? "black-key" : "white-key"}`;
-    key.dataset.note = note;
-    key.setAttribute("aria-label", `${SOLFEGE[note[0]]}${isBlack ? " シャープ" : ""} ${note.slice(-1)}`);
-    if (isBlack) {
-      key.style.setProperty("--after-white", whiteIndex);
-    } else {
-      key.style.setProperty("--white-index", whiteIndex);
-      whiteIndex += 1;
-    }
-    key.addEventListener("pointerdown", onKeyDown);
-    key.addEventListener("pointerup", onKeyUp);
-    key.addEventListener("pointercancel", onKeyUp);
-    key.addEventListener("lostpointercapture", onKeyUp);
-    ui.piano.appendChild(key);
-    keyElements.set(note, key);
+  ui.mute.addEventListener("change", () => { silent = ui.mute.checked; if (silent) { audio.stopAll(); tested = false; ui["sound-start"].disabled = true; } });
+  ui["sound-start"].addEventListener("click", () => {
+    if (!tested || !audio.ready || audio.volume === 0 || ui.mute.checked) { showSound(); return; }
+    silent = false; audio.stopAll(); resume();
   });
-}
-
-async function onKeyDown(event) {
-  event.preventDefault();
-  const key = event.currentTarget;
-  const note = key.dataset.note;
-  if (activePointers.has(event.pointerId)) return;
-  key.setPointerCapture?.(event.pointerId);
-  activePointers.set(event.pointerId, key);
-  key.classList.add("active");
-
-  try { await audio.unlock(); } catch (_) { /* 音声不可でもゲームは続ける */ }
-  const expected = currentSong?.notes[noteIndex];
-  const duration = note === expected ? currentSong.durations[noteIndex] : 0.45;
-  audio.play(note, duration);
-
-  if (!currentSong || !ui.clearDialog.classList.contains("is-hidden")) return;
-  if (note === expected) {
-    showSparkle(key);
-    noteIndex += 1;
-    updateProgress();
-    if (noteIndex >= currentSong.notes.length) {
-      clearNextKey();
-      completionTimer = window.setTimeout(showClear, 450);
-    } else {
-      highlightNextKey();
-    }
-  } else {
-    key.classList.remove("wrong");
-    void key.offsetWidth;
-    key.classList.add("wrong");
+  $("silent-start").addEventListener("click", () => { silent = true; ui.mute.checked = true; audio.stopAll(); resume(); });
+  ui["pause-button"].addEventListener("click", () => { pause(); showSound("ひとやすみ。おとをためして つづけよう！"); });
+  $("sound-button").addEventListener("click", () => { pause(); showSound(); });
+  for (const button of document.querySelectorAll("[data-speed]")) button.addEventListener("click", () => {
+    speed = button.dataset.speed; document.querySelectorAll("[data-speed]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+  });
+  function layoutChanged() { measure(); if (isPortrait() && running) { pause(); showSound("よこむきに もどして つづけよう！"); } }
+  window.addEventListener("resize", layoutChanged);
+  document.addEventListener("visibilitychange", () => { if (document.hidden && running) { pause(); showSound("おかえり！ おとをためして つづけよう！"); } });
+  document.addEventListener("gesturestart", (event) => event.preventDefault(), { passive: false });
+  document.addEventListener("contextmenu", (event) => event.preventDefault());
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    const hadController = !!navigator.serviceWorker.controller;
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing || !hadController) return; refreshing = true;
+      // Workerが旧版も含めて再読込する。失敗時にも手動更新ボタンを残す。
+      visible(ui["update-notice"], true);
+    });
+    $("update-button").addEventListener("click", () => location.reload());
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((registration) => registration.update()).catch((error) => {
+        if (navigator.serviceWorker.controller) {
+          // オフラインでは更新確認に失敗するが、保存済みゲームは利用できる。
+          $("offline-status").textContent = "Rhythm 3.0 · 保存したゲームで あそべます";
+        } else {
+          console.warn("[piano offline]", error); $("offline-status").textContent = "オフライン保存は未完了です。オンラインで遊べます。";
+        }
+      });
+    });
   }
-}
-
-function onKeyUp(event) {
-  const key = activePointers.get(event.pointerId) || event.currentTarget;
-  key.classList.remove("active");
-  activePointers.delete(event.pointerId);
-}
-
-function startSong(song) {
-  window.clearTimeout(completionTimer);
-  currentSong = song;
-  noteIndex = 0;
-  ui.songTitle.textContent = song.title;
-  ui.home.classList.add("is-hidden");
-  ui.game.classList.remove("is-hidden");
-  ui.clearDialog.classList.add("is-hidden");
-  updateProgress();
-  highlightNextKey();
-  audio.unlock().catch(() => {});
-}
-
-function updateProgress() {
-  const total = currentSong.notes.length;
-  ui.progressText.textContent = `${noteIndex} / ${total}`;
-  ui.progressFill.style.width = `${(noteIndex / total) * 100}%`;
-}
-
-function clearNextKey() {
-  keyElements.forEach((key) => key.classList.remove("next"));
-}
-
-function highlightNextKey() {
-  clearNextKey();
-  keyElements.get(currentSong.notes[noteIndex])?.classList.add("next");
-}
-
-function showSparkle(key) {
-  const pianoRect = ui.piano.getBoundingClientRect();
-  const keyRect = key.getBoundingClientRect();
-  for (let index = 0; index < 3; index += 1) {
-    const star = document.createElement("span");
-    star.className = "sparkle";
-    star.textContent = index === 1 ? "✦" : "★";
-    star.style.left = `${keyRect.left - pianoRect.left + keyRect.width * (0.25 + index * 0.25)}px`;
-    star.style.top = `${keyRect.top - pianoRect.top + keyRect.height * 0.42 + index * 8}px`;
-    star.style.animationDelay = `${index * 55}ms`;
-    ui.sparkles.appendChild(star);
-    star.addEventListener("animationend", () => star.remove(), { once: true });
-    window.setTimeout(() => star.remove(), 1000);
-  }
-}
-
-function showClear() {
-  ui.clearDialog.classList.remove("is-hidden");
-  ui.retry.focus({ preventScroll: true });
-}
-
-function goHome() {
-  window.clearTimeout(completionTimer);
-  currentSong = null;
-  noteIndex = 0;
-  clearNextKey();
-  ui.clearDialog.classList.add("is-hidden");
-  ui.game.classList.add("is-hidden");
-  ui.home.classList.remove("is-hidden");
-}
-
-ui.back.addEventListener("click", goHome);
-ui.songs.addEventListener("click", goHome);
-ui.retry.addEventListener("click", () => startSong(currentSong));
-ui.sound.addEventListener("click", () => {
-  muted = !muted;
-  ui.sound.textContent = muted ? "🔇" : "🔊";
-  ui.sound.setAttribute("aria-label", muted ? "おとをオンにする" : "おとをオフにする");
-});
-
-document.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
-document.addEventListener("gesturestart", (event) => event.preventDefault(), { passive: false });
-document.addEventListener("contextmenu", (event) => event.preventDefault());
-
-renderSongs();
-renderPiano();
-
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
-}
+})();
