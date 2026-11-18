@@ -1,11 +1,60 @@
 "use strict";
-// notes: C4〜C6、durations: 秒。初期版のオリジナル3曲をそのまま収録。
+// notes: C4〜C6、tempo: BPM、durations: 拍数（1 = 四分音符）。
+// rests（省略可）: その音の後の休符の拍数。同じ長さの配列で指定。
+// timing:"legacy" の既存3曲だけは旧版の秒データ。tempo:100で旧ふつうの間隔を保持。
 globalThis.PIANO_SONGS = [
-  { id: "morning-hop", title: "おひさまジャンプ", difficulty: "かんたん", icon: "☀️", stars: 1,
+  { id: "morning-hop", title: "おひさまジャンプ", difficulty: "かんたん", icon: "☀️", stars: 1, tempo: 100, timing: "legacy", kind: "original",
     notes: ["C4","D4","E4","G4","E4","D4","C4","G4"], durations: [0.45,0.45,0.45,0.7,0.45,0.45,0.6,0.9] },
-  { id: "cloud-walk", title: "くもの おさんぽ", difficulty: "ふつう", icon: "☁️", stars: 2,
+  { id: "cloud-walk", title: "くもの おさんぽ", difficulty: "ふつう", icon: "☁️", stars: 2, tempo: 100, timing: "legacy", kind: "original",
     notes: ["E4","G4","A4","G4","E4","D4","F4","A4","C5","A4","G4","C5"], durations: [0.4,0.4,0.6,0.4,0.4,0.6,0.4,0.4,0.65,0.4,0.5,0.9] },
-  { id: "star-parade", title: "ほしの パレード", difficulty: "ちょっとむずかしい", icon: "⭐", stars: 3,
+  { id: "star-parade", title: "ほしの パレード", difficulty: "むずかしい", icon: "⭐", stars: 3, tempo: 100, timing: "legacy", kind: "original",
     notes: ["C4","E4","G4","B4","C5","D5","E5","G5","F5","D5","B4","G4","A4","B4","C5","C6"],
-    durations: [0.35,0.35,0.35,0.45,0.35,0.35,0.45,0.65,0.35,0.35,0.45,0.5,0.35,0.35,0.55,1.0] }
+    durations: [0.35,0.35,0.35,0.45,0.35,0.35,0.45,0.65,0.35,0.35,0.45,0.5,0.35,0.35,0.55,1.0] },
+  // 以下7曲はこのゲームのための新しいオリジナル旋律。durationsは拍数。
+  { id: "balloon-walk", title: "ふうせん さんぽ", difficulty: "かんたん", icon: "🎈", stars: 1, tempo: 72, kind: "original",
+    notes: ["C4","E4","D4","G4","E4","C4","D4","F4","E4","C4"],
+    durations: [1,1,0.75,1.25,1,1,0.75,1.25,1,2] },
+  { id: "leaf-drops", title: "こもれび ポロン", difficulty: "かんたん", icon: "🌿", stars: 1, tempo: 76, kind: "original",
+    notes: ["G4","E4","F4","A4","G4","D4","E4","G4","F4","E4","D4","C4"],
+    durations: [1,1,1,1.5,1,0.5,1,1,1,1,0.75,2] },
+  { id: "rolling-acorn", title: "ころころ どんぐり", difficulty: "かんたん", icon: "🌰", stars: 1, tempo: 80, kind: "original",
+    notes: ["D4","F4","E4","C4","G4","E4","D4","C4"], durations: [1,0.75,1.25,1,1,0.75,1.25,2] },
+  { id: "kitten-step", title: "こねこの ステップ", difficulty: "ふつう", icon: "🐈", stars: 2, tempo: 84, kind: "original",
+    notes: ["E4","G4","F#4","G4","B4","A4","G4","D5","C5","A4","G4","F#4","E4","G4","D4","E4"],
+    durations: [0.75,0.75,0.5,1,0.75,0.75,1,1.5,0.75,0.75,0.5,1,0.75,0.75,1,2] },
+  { id: "rainbow-bus", title: "にじいろ バス", difficulty: "ふつう", icon: "🌈", stars: 2, tempo: 88, kind: "original",
+    notes: ["C5","G4","A4","C5","D5","B4","G4","E4","F4","A4","G4","C5","E5","D5","C5","A4","B4","D5","G4","C5"],
+    durations: [0.75,0.75,1,1,0.75,0.75,1,1.5,0.75,0.75,1,1,0.75,0.75,1,1,0.75,0.75,1,2] },
+  { id: "moon-swing", title: "つきの ブランコ", difficulty: "むずかしい", icon: "🌙", stars: 3, tempo: 92, kind: "original",
+    notes: ["D4","F4","A4","C5","A#4","A4","F4","E4","G4","A#4","D5","C5","A4","G4","F4","D4","F4","G4","A4","C5","D5","A4","F4","D4"],
+    durations: [0.75,0.75,1,1,0.5,0.5,1,1,0.75,0.75,1,1,0.5,0.5,1,1,0.75,0.75,1,1,0.75,0.75,1,2] },
+  { id: "rocket-trail", title: "ロケット きらり", difficulty: "むずかしい", icon: "🚀", stars: 3, tempo: 104, kind: "original",
+    notes: ["E4","F#4","G#4","B4","A4","G#4","F#4","E4","G#4","B4","C#5","E5","D#5","C#5","B4","G#4","A4","C#5","D5","F#5","E5","D5","C#5","A4","B4","D#5","F#5","A5","G#5","F#5","E5","E4"],
+    durations: [0.5,0.5,1,1,0.5,0.5,0.75,1.25,0.5,0.5,1,1,0.5,0.5,0.75,1.25,0.5,0.5,1,1,0.5,0.5,0.75,1.25,0.5,0.5,1,1,0.5,0.5,1,2] }
+  ,
+  // 原旋律の出典・保護期間と独自の移調/抜粋は MELODY-SOURCES.md に記録。
+  // 歌詞・既存音源・MIDI・原譜画像はゲームに含めない。
+  { id: "twinkle", title: "きらきら星", difficulty: "かんたん", icon: "✨", stars: 1, tempo: 92, kind: "traditional", sourceId: "mozart-k265", excerpt: true,
+    notes: ["C4","C4","G4","G4","A4","A4","G4","F4","F4","E4","E4","D4","D4","C4"],
+    durations: [1,1,1,1,1,1,2,1,1,1,1,1,1,2] },
+  { id: "butterfly", title: "ちょうちょう", difficulty: "かんたん", icon: "🦋", stars: 1, tempo: 72, kind: "traditional", sourceId: "shoka-1881-17", excerpt: true,
+    notes: ["G4","E4","E4","F4","D4","D4","C4","D4","E4","F4","G4","G4","G4","G4","E4","E4","E4","F4","D4","D4","D4","C4","E4","G4","G4","E4","E4","E4"],
+    durations: [0.5,0.5,1,0.5,0.5,1,0.5,0.5,0.5,0.5,0.5,0.5,1,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,1] },
+  { id: "bee", title: "ぶんぶんぶん", difficulty: "ふつう", icon: "🐝", stars: 2, tempo: 72, kind: "traditional", sourceId: "biene-1843",
+    notes: ["G4","F4","E4","D4","E4","F4","D4","C4","E4","F4","G4","E4","D4","E4","F4","D4","E4","F4","G4","E4","D4","E4","F4","D4","G4","F4","E4","D4","E4","F4","D4","C4"],
+    durations: [1,1,1,0.5,0.5,0.5,0.5,1,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,1,1,1,0.5,0.5,0.5,0.5,1],
+    rests: [0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1] },
+  { id: "musunde", title: "むすんでひらいて", difficulty: "かんたん", icon: "👐", stars: 1, tempo: 100, kind: "traditional", sourceId: "shoka-1881-13", excerpt: true,
+    notes: ["E4","E4","D4","C4","C4","D4","D4","E4","D4","C4","G4","G4","F4","E4","E4","D4","C4","D4","E4","C4"],
+    durations: [2,1,1,2,2,2,2,1,1,2,2,1,1,2,2,1,1,1,1,2],
+    rests: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2] },
+  { id: "mary", title: "メリーさんのひつじ", edition: "1868年版", difficulty: "ふつう", icon: "🐑", stars: 2, tempo: 64, kind: "traditional", sourceId: "mary-1868", excerpt: true,
+    notes: ["E4","D4","C4","D4","E4","E4","E4","D4","D4","D4","E4","E4","E4","E4","D4","C4","D4","E4","E4","E4","E4","D4","D4","E4","D4","C4"],
+    durations: [0.75,0.25,0.5,0.5,0.5,0.5,1,0.5,0.5,1,0.5,0.5,1,0.75,0.25,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.75,0.25,1.5] },
+  { id: "ode-to-joy", title: "よろこびの歌", difficulty: "かんたん", icon: "🎵", stars: 1, tempo: 104, kind: "traditional", sourceId: "beethoven-op125", excerpt: true,
+    notes: ["E4","F4","G4","G4","F4","E4","D4","C4","D4","E4","E4","D4","D4","E4","F4","G4","G4","F4","E4","D4","C4","D4","E4","D4","C4","C4"],
+    durations: [2,1,1,1,1,1,1,2,1,1,1.5,0.5,2,2,1,1,1,1,1,1,2,1,1,1.5,0.5,2] },
+  { id: "little-fox", title: "こぎつね", difficulty: "かんたん", icon: "🦊", stars: 1, tempo: 100, kind: "traditional", sourceId: "fox-1824", excerpt: true,
+    notes: ["C4","D4","E4","F4","G4","G4","G4","G4","A4","F4","C5","A4","G4"],
+    durations: [1,1,1,1,1,1,1,1,1,1,1,1,2], rests: [0,0,0,0,0,0,0,0,0,0,0,0,2] }
 ];

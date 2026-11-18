@@ -1,7 +1,7 @@
 // 同じ github.io ドメインの別アプリや別リポジトリのキャッシュを触らない。
 const CACHE_PREFIX = `hikaru-piano:${self.registration.scope}:`;
 // 公開ファイルを更新するときは、このバージョンも増やす。
-const CACHE_NAME = `${CACHE_PREFIX}rhythm-3.0-r4`;
+const CACHE_NAME = `${CACHE_PREFIX}rhythm-3.1-r2`;
 const APP_FILES = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
   "./piano-star.svg", "./apple-touch-icon.png", "./piano-192.png", "./piano-512.png",

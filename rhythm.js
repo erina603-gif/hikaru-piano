@@ -8,18 +8,31 @@
     return { note, black, center, width, left: center - width / 2, frequency: 440 * 2 ** ((index + 60 - 69) / 12) };
   });
   const speeds = {
-    slow: { label: "ゆっくり", scale: 2.6, minimum: 0.90, fall: 3.2, perfect: 0.18, good: 0.38 },
-    normal: { label: "ふつう", scale: 1.8, minimum: 0.65, fall: 2.4, perfect: 0.14, good: 0.30 }
+    verySlow: { label: "とてもゆっくり", multiplier: 0.5 },
+    slow: { label: "ゆっくり", multiplier: 0.75 },
+    normal: { label: "ふつう", multiplier: 1 },
+    fast: { label: "はやい", multiplier: 1.25 },
+    veryFast: { label: "超はやい", multiplier: 1.5 }
   };
   // DOM・音声から独立した譜面と判定。時刻は秒。
   class Round {
     constructor(song, speed = "slow") {
-      this.config = speeds[speed] || speeds.slow;
-      let at = this.config.fall + 1;
+      const selected = speeds[speed] || speeds.slow, rate = selected.multiplier;
+      this.config = { ...selected, fall: 2.4 / rate, perfect: 0.14 / rate, good: 0.30 / rate };
+      if (!Number.isFinite(song.tempo) || song.tempo <= 0 || !Array.isArray(song.notes) || !song.notes.length ||
+          !Array.isArray(song.durations) || song.notes.length !== song.durations.length ||
+          (song.timing && song.timing !== "legacy") ||
+          (song.rests !== undefined && (!Array.isArray(song.rests) || song.rests.length !== song.notes.length || song.timing === "legacy"))) throw new Error("Invalid song data");
+      // 全時刻は実時間の秒。曲のテンポと倍率をここで一度だけ適用する。
+      const secondsPerBeat = 60 / song.tempo / rate, legacyScale = 100 / song.tempo / rate;
+      let at = 3.4 / rate;
       this.events = song.notes.map((note, i) => {
-        if (!names.includes(note) || !(song.durations[i] > 0)) throw new Error("Invalid song data");
-        const event = { note, at, duration: song.durations[i], result: null, demoPlayed: false };
-        at += Math.max(this.config.minimum, song.durations[i] * this.config.scale);
+        const length = song.durations[i], rest = song.rests ? song.rests[i] : 0;
+        if (!names.includes(note) || !Number.isFinite(length) || length <= 0 || !Number.isFinite(rest) || rest < 0) throw new Error("Invalid song data");
+        // 既存3曲は旧版の音の長さ・通常速度の間隔をそのまま保持。新曲は拍数。
+        const duration = song.timing === "legacy" ? length * legacyScale : length * secondsPerBeat;
+        const event = { note, at, duration, result: null, demoPlayed: false };
+        at += song.timing === "legacy" ? Math.max(0.65, length * 1.8) * legacyScale : duration + rest * secondsPerBeat;
         return event;
       });
       this.score = 0; this.combo = 0; this.maxCombo = 0;

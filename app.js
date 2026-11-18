@@ -67,7 +67,7 @@
   function startSong(selected) {
     pause(); audioAction++; song = selected; elapsed = 0;
     round = new Rhythm.Round(song, speed); demonstrated = $("demo").checked;
-    ui["song-title"].textContent = `${song.title} · ${Rhythm.speeds[speed].label}`;
+    ui["song-title"].textContent = `${song.title}${song.edition ? " " + song.edition : ""}${song.excerpt ? "（ショート）" : ""} · ${Rhythm.speeds[speed].label} ${Rhythm.speeds[speed].multiplier}倍`;
     visible(ui["home-screen"], false); visible(ui["game-screen"], true); visible(ui["clear-dialog"], false);
     ui["note-field"].replaceChildren();
     noteElements = round.events.map((event) => {
@@ -134,11 +134,22 @@
     element.addEventListener("keydown", (event) => { if ((event.key === " " || event.key === "Enter") && !event.repeat) { event.preventDefault(); press(key.note, (performance.now() - origin) / 1000); } });
     ui.piano.appendChild(element); keyElements.set(key.note, element);
   }
+  const songButtons = [];
   for (const item of PIANO_SONGS) {
     const button = document.createElement("button"); button.className = "song-card"; button.type = "button";
-    button.innerHTML = `<span class="song-icon" aria-hidden="true">${item.icon}</span><strong>${item.title}</strong><span class="difficulty">${item.difficulty} · ${item.notes.length}おん</span>`;
-    button.addEventListener("click", () => startSong(item)); ui["song-list"].appendChild(button);
+    button.innerHTML = `<span class="song-icon">${item.icon}${item.edition ? `<small> ${item.edition}</small>` : ""}</span><strong>${item.title}</strong><span class="difficulty">${item.difficulty} · ${item.notes.length}おん${item.excerpt ? " · ショート" : ""}</span>`;
+    button.dataset.difficulty = item.difficulty;
+    button.addEventListener("click", () => startSong(item)); ui["song-list"].appendChild(button); songButtons.push(button);
   }
+  function filterSongs(difficulty) {
+    songButtons.forEach((button) => visible(button, button.dataset.difficulty === difficulty));
+    ui["song-list"].scrollTop = 0;
+    $("song-count").textContent = `${difficulty} ${songButtons.filter((button) => !button.hidden).length}きょく`;
+    document.querySelectorAll(".difficulty-tabs [data-difficulty]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.difficulty === difficulty)));
+  }
+  // 難易度の切替ボタンだけを扱う。
+  document.querySelectorAll(".difficulty-tabs [data-difficulty]").forEach((button) => button.addEventListener("click", () => filterSongs(button.dataset.difficulty)));
+  filterSongs("かんたん");
   function home() {
     pause(); audioAction++; round = null;
     for (const id of ["game-screen", "clear-dialog", "sound-dialog"]) visible(ui[id], false);
@@ -159,9 +170,7 @@
   $("silent-start").addEventListener("click", () => { silent = true; ui.mute.checked = true; audio.stopAll(); resume(); });
   ui["pause-button"].addEventListener("click", () => { pause(); showSound("ひとやすみ。おとをためして つづけよう！"); });
   $("sound-button").addEventListener("click", () => { pause(); showSound(); });
-  for (const button of document.querySelectorAll("[data-speed]")) button.addEventListener("click", () => {
-    speed = button.dataset.speed; document.querySelectorAll("[data-speed]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
-  });
+  $("speed-select").addEventListener("change", () => { if (Rhythm.speeds[$("speed-select").value]) speed = $("speed-select").value; });
   function layoutChanged() { measure(); if (isPortrait() && running) { pause(); showSound("よこむきに もどして つづけよう！"); } }
   window.addEventListener("resize", layoutChanged);
   document.addEventListener("visibilitychange", () => { if (document.hidden && running) { pause(); showSound("おかえり！ おとをためして つづけよう！"); } });
@@ -180,7 +189,7 @@
       navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((registration) => registration.update()).catch((error) => {
         if (navigator.serviceWorker.controller) {
           // オフラインでは更新確認に失敗するが、保存済みゲームは利用できる。
-          $("offline-status").textContent = "Rhythm 3.0 · 保存したゲームで あそべます";
+          $("offline-status").textContent = "Rhythm 3.1 · 保存したゲームで あそべます";
         } else {
           console.warn("[piano offline]", error); $("offline-status").textContent = "オフライン保存は未完了です。オンラインで遊べます。";
         }

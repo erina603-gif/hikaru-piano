@@ -19,9 +19,12 @@
 <main id="app">
   <section id="home-screen" class="screen home-screen" aria-labelledby="home-title">
     <header class="home-header"><span aria-hidden="true">♫</span><div><h1 id="home-title">ひかるピアノ</h1><p>♪ が せんに きたら タップ！</p></div><span aria-hidden="true">★</span></header>
-    <div class="options"><span>はやさ</span><button type="button" data-speed="slow" aria-pressed="true">ゆっくり</button><button type="button" data-speed="normal" aria-pressed="false">ふつう</button><label><input type="checkbox" id="demo"> おてほんの おと</label></div>
+    <div class="options"><label for="speed-select">はやさ</label><select id="speed-select" aria-label="きょくの はやさ">
+      <option value="verySlow">とてもゆっくり · 0.5倍</option><option value="slow" selected>ゆっくり · 0.75倍</option><option value="normal">ふつう · 1.0倍</option><option value="fast">はやい · 1.25倍</option><option value="veryFast">超はやい · 1.5倍</option>
+    </select><label><input type="checkbox" id="demo"> おてほんの おと</label></div>
+    <div class="difficulty-tabs" role="group" aria-label="むずかしさ"><button type="button" data-difficulty="かんたん" aria-pressed="true">かんたん</button><button type="button" data-difficulty="ふつう" aria-pressed="false">ふつう</button><button type="button" data-difficulty="むずかしい" aria-pressed="false">むずかしい</button></div>
     <div id="song-list" class="song-list" aria-label="きょくをえらぶ"></div>
-    <footer><span id="offline-status">Rhythm 3.0 · じぶんのペースで たのしもう</span></footer>
+    <footer><span id="song-count"></span> · きょくは うえしたに スクロール <span id="offline-status">Rhythm 3.1</span></footer>
   </section>
   <section id="game-screen" class="screen game-screen" hidden aria-labelledby="song-title">
     <header class="game-header">
