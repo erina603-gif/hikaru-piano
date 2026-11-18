@@ -1,0 +1,17 @@
+{
+  "name": "ひかるピアノ",
+  "short_name": "ひかるピアノ",
+  "description": "ひかった鍵盤を順番にタップして遊ぶ、子ども向けピアノゲーム",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#dff7f4",
+  "theme_color": "#8edbd5",
+  "icons": [
+    { "src": "piano-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "piano-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "piano-star.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
