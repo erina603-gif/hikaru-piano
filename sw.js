@@ -1,13 +1,19 @@
 // 同じ github.io ドメインの別アプリや別リポジトリのキャッシュを触らない。
 const CACHE_PREFIX = `hikaru-piano:${self.registration.scope}:`;
 // 公開ファイルを更新するときは、このバージョンも増やす。
-const CACHE_NAME = `${CACHE_PREFIX}rhythm-3.1-r2`;
+const BUILD = "3.2-audio1";
+const CACHE_NAME = `${CACHE_PREFIX}rhythm-${BUILD}`;
 const APP_FILES = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest",
   "./piano-star.svg", "./apple-touch-icon.png", "./piano-192.png", "./piano-512.png",
   "./rhythm.js", "./songs.js", "./audio.js"
 ];
 const APP_URLS = new Set(APP_FILES.map((file) => new URL(file, self.registration.scope).href));
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "PIANO_VERSION" || !event.source?.url) return;
+  const url = new URL(event.source.url); url.search = ""; url.hash = "";
+  if (url.href === self.registration.scope || url.href === new URL("index.html", self.registration.scope).href) event.source.postMessage({ type: "PIANO_VERSION", version: BUILD });
+});
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

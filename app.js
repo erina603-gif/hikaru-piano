@@ -1,6 +1,8 @@
 "use strict";
 (() => {
   const $ = (id) => document.getElementById(id);
+  const BUILD = "3.2-audio1";
+  let workerVersion = "未確認（旧版Workerは応答しません）", updateState = "未確認", registration = null, updating = false, lastGesture = "未確認";
   const ui = Object.fromEntries(["home-screen","game-screen","song-list","song-title","progress-fill","progress-text","piano","note-field","judgement","score","combo","clear-dialog","clear-result","sound-dialog","audio-status","audio-detail","sound-start","test-sound","reconnect","volume","mute","pause-button","countdown","update-notice"].map((id) => [id, $(id)]));
   let song = null, round = null, running = false, elapsed = 0, origin = 0, frame = 0;
   let speed = "slow", silent = false, demonstrated = false, tested = false, audioAction = 0;
@@ -14,33 +16,70 @@
       tested = false; ui["sound-start"].disabled = true;
       if (running && !silent) { pause(); showSound("音声が中断されました。おとをためして再開してね。"); }
     }
-  }, (error) => { ui["audio-status"].textContent = error.message; });
+    renderDiagnostics();
+  }, (error) => { ui["audio-status"].textContent = error.message; renderDiagnostics(); });
+
+  function renderDiagnostics() {
+    const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+    const ios = navigator.userAgent?.match(/OS ([\d_]+) like Mac OS X/)?.[1]?.replace(/_/g, ".") || "取得不可";
+    const screenBuild = $("html-build")?.dataset.version || "旧版";
+    const diagnostics = $("audio-diagnostics");
+    if (diagnostics) diagnostics.textContent = [
+      `画面 ${screenBuild} / 操作 ${BUILD} / 音声 ${PianoAudio.VERSION || "旧版"}`,
+      `起動: ${standalone ? "ホーム画面PWA" : "ブラウザ"} / iOS: ${ios} / ${document.hidden ? "背景" : "表示中"}`,
+      `AudioContext: ${audio.context?.state || "未生成"} / 接続 #${audio.contextSerial || 0} / 再生成待ち: ${audio.needsRebuild ? "あり" : "なし"}`,
+      `タップ時の操作権限: ${lastGesture} / resume: ${audio.lastResume || "未実行"}`,
+      `AudioSession: ${navigator.audioSession?.type || "未対応"} / ${navigator.audioSession?.state || "状態APIなし"} / ${audio.sessionNote || "未設定"}`,
+      `直近テスト: ${audio.lastProbe || "未測定"}（スピーカー出力は測定不可）`,
+      `音量: ${ui.volume.value}% / ミュート: ${ui.mute.checked ? "ON" : "OFF"} / 復帰: ${audio.lastLifecycle || "初回"}`,
+      `最後のエラー: ${audio.lastError || "なし"}`,
+      `Service Worker: ${workerVersion} / 更新: ${updateState}`
+    ].join("\n");
+    if (screenBuild !== BUILD || PianoAudio.VERSION !== BUILD) visible(ui["update-notice"], true);
+  }
+  function askWorkerVersion() { navigator.serviceWorker?.controller?.postMessage?.({ type: "PIANO_VERSION" }); }
+  function checkForUpdate() {
+    if (!registration || updating) return;
+    updating = true; updateState = "確認中"; renderDiagnostics();
+    registration.update().then(() => { updateState = "確認済み"; askWorkerVersion(); }).catch(() => {
+      updateState = "取得失敗（通信状況を確認）";
+      $("offline-status").textContent = navigator.serviceWorker.controller ? "Rhythm 3.2 · 保存したゲームで あそべます" : "オフライン保存は未完了です";
+    }).finally(() => { updating = false; renderDiagnostics(); });
+  }
 
   function showSound(message = "まずは おとを ためしてね") {
     tested = false; ui["sound-start"].disabled = true;
     ui["sound-start"].textContent = elapsed > 0 ? "きこえた！ つづける" : "きこえた！ スタート";
     ui["audio-status"].textContent = message; visible(ui["sound-dialog"], true);
     ui["test-sound"].focus({ preventScroll: true });
+    renderDiagnostics();
   }
   function testSound(rebuild) {
     const action = ++audioAction;
     tested = false; ui["sound-start"].disabled = true;
+    ui["test-sound"].disabled = true;
     ui["audio-status"].textContent = "おとを じゅんびしています…";
     ui.mute.checked = false; silent = false;
     if (Number(ui.volume.value) === 0) ui.volume.value = "65";
     $("volume-value").textContent = `${ui.volume.value}%`;
     audio.setVolume(Number(ui.volume.value) / 100);
-    // ユーザーのclick内から同期的に初期化・resumeする（iOS）。
-    audio.unlock(rebuild).then(() => {
+    if (typeof audio.test !== "function") {
+      ui["audio-status"].textContent = "音声ファイルが旧版です。新版を確認して更新してください。";
+      ui["test-sound"].disabled = false; visible(ui["update-notice"], true); renderDiagnostics(); return;
+    }
+    lastGesture = navigator.userActivation ? (navigator.userActivation.isActive ? "有効" : "無効") : "API未対応";
+    // 初期化・resume・聞こえるテスト音の予約までをclick内で実行。
+    audio.test(rebuild).then(() => {
       if (action !== audioAction || ui["sound-dialog"].hidden) return;
-      audio.play("C5", 0.6); tested = true; ui["sound-start"].disabled = false;
+      tested = true; ui["sound-start"].disabled = false;
       ui["audio-status"].textContent = "♪ おとが きこえたら スタート！";
-      ui["audio-detail"].textContent = `再生処理OK / ${audio.context.state} / 音量 ${ui.volume.value}%`;
+      ui["audio-detail"].textContent = "音声の時計と信号を確認しました。聞こえたらスタートしてね。";
     }).catch((error) => {
       if (action !== audioAction) return;
       ui["audio-status"].textContent = error.message;
       ui["audio-detail"].textContent = `音声エラー: ${error.name || "Error"} / ${audio.context?.state || "未開始"}`;
-    });
+    }).finally(() => { if (action === audioAction) { ui["test-sound"].disabled = false; renderDiagnostics(); } });
+    renderDiagnostics();
   }
   function updateScore() {
     ui.score.textContent = round.score; ui.combo.textContent = round.combo;
@@ -152,6 +191,7 @@
   filterSongs("かんたん");
   function home() {
     pause(); audioAction++; round = null;
+    audio.cancelUnlock?.(); audio.cancelProbe?.(); ui["test-sound"].disabled = false;
     for (const id of ["game-screen", "clear-dialog", "sound-dialog"]) visible(ui[id], false);
     visible(ui["home-screen"], true);
   }
@@ -161,39 +201,64 @@
   ui.volume.addEventListener("input", () => {
     audio.setVolume(Number(ui.volume.value) / 100); $("volume-value").textContent = `${ui.volume.value}%`;
     if (+ui.volume.value === 0) { tested = false; ui["sound-start"].disabled = true; ui["audio-status"].textContent = "音量が0です。音量を上げてためしてね。"; }
+    renderDiagnostics();
   });
-  ui.mute.addEventListener("change", () => { silent = ui.mute.checked; if (silent) { audio.stopAll(); tested = false; ui["sound-start"].disabled = true; } });
+  ui.mute.addEventListener("change", () => { silent = ui.mute.checked; if (silent) { audio.stopAll(); tested = false; ui["sound-start"].disabled = true; } renderDiagnostics(); });
   ui["sound-start"].addEventListener("click", () => {
     if (!tested || !audio.ready || audio.volume === 0 || ui.mute.checked) { showSound(); return; }
     silent = false; audio.stopAll(); resume();
   });
-  $("silent-start").addEventListener("click", () => { silent = true; ui.mute.checked = true; audio.stopAll(); resume(); });
+  $("silent-start").addEventListener("click", () => {
+    audioAction++; audio.cancelUnlock?.(); audio.cancelProbe?.(); ui["test-sound"].disabled = false;
+    silent = true; ui.mute.checked = true; audio.stopAll(); resume();
+  });
   ui["pause-button"].addEventListener("click", () => { pause(); showSound("ひとやすみ。おとをためして つづけよう！"); });
   $("sound-button").addEventListener("click", () => { pause(); showSound(); });
   $("speed-select").addEventListener("change", () => { if (Rhythm.speeds[$("speed-select").value]) speed = $("speed-select").value; });
   function layoutChanged() { measure(); if (isPortrait() && running) { pause(); showSound("よこむきに もどして つづけよう！"); } }
   window.addEventListener("resize", layoutChanged);
-  document.addEventListener("visibilitychange", () => { if (document.hidden && running) { pause(); showSound("おかえり！ おとをためして つづけよう！"); } });
+  function background(reason) {
+    pause(); audioAction++; audio.background?.(reason); tested = false;
+    ui["test-sound"].disabled = false; ui["sound-start"].disabled = true;
+    if (round && !ui["game-screen"].hidden && ui["clear-dialog"].hidden) showSound("おかえり！ おとをためして つづけよう！");
+    renderDiagnostics();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) background("visibilitychange");
+    else { renderDiagnostics(); askWorkerVersion(); checkForUpdate(); }
+  });
+  window.addEventListener("pagehide", () => background("pagehide"));
+  window.addEventListener("pageshow", (event) => { if (event.persisted) background("pageshow: bfcache"); askWorkerVersion(); checkForUpdate(); });
+  $("diagnostics-refresh")?.addEventListener("click", () => { askWorkerVersion(); renderDiagnostics(); });
+  $("check-update")?.addEventListener("click", checkForUpdate);
   document.addEventListener("gesturestart", (event) => event.preventDefault(), { passive: false });
   document.addEventListener("contextmenu", (event) => event.preventDefault());
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
     const hadController = !!navigator.serviceWorker.controller;
     let refreshing = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
+      askWorkerVersion();
       if (refreshing || !hadController) return; refreshing = true;
       // Workerが旧版も含めて再読込する。失敗時にも手動更新ボタンを残す。
       visible(ui["update-notice"], true);
     });
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.source !== navigator.serviceWorker.controller || event.data?.type !== "PIANO_VERSION") return;
+      workerVersion = String(event.data.version); renderDiagnostics();
+      if (workerVersion !== BUILD) visible(ui["update-notice"], true);
+    });
     $("update-button").addEventListener("click", () => location.reload());
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((registration) => registration.update()).catch((error) => {
+      navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((value) => { registration = value; askWorkerVersion(); checkForUpdate(); }).catch((error) => {
         if (navigator.serviceWorker.controller) {
           // オフラインでは更新確認に失敗するが、保存済みゲームは利用できる。
-          $("offline-status").textContent = "Rhythm 3.1 · 保存したゲームで あそべます";
+          $("offline-status").textContent = "Rhythm 3.2 · 保存したゲームで あそべます";
         } else {
           console.warn("[piano offline]", error); $("offline-status").textContent = "オフライン保存は未完了です。オンラインで遊べます。";
         }
+        updateState = "登録失敗"; renderDiagnostics();
       });
     });
   }
+  renderDiagnostics();
 })();

@@ -17,6 +17,7 @@
 </head>
 <body>
 <main id="app">
+  <span id="html-build" data-version="3.2-audio1" hidden></span>
   <section id="home-screen" class="screen home-screen" aria-labelledby="home-title">
     <header class="home-header"><span aria-hidden="true">♫</span><div><h1 id="home-title">ひかるピアノ</h1><p>♪ が せんに きたら タップ！</p></div><span aria-hidden="true">★</span></header>
     <div class="options"><label for="speed-select">はやさ</label><select id="speed-select" aria-label="きょくの はやさ">
@@ -24,7 +25,7 @@
     </select><label><input type="checkbox" id="demo"> おてほんの おと</label></div>
     <div class="difficulty-tabs" role="group" aria-label="むずかしさ"><button type="button" data-difficulty="かんたん" aria-pressed="true">かんたん</button><button type="button" data-difficulty="ふつう" aria-pressed="false">ふつう</button><button type="button" data-difficulty="むずかしい" aria-pressed="false">むずかしい</button></div>
     <div id="song-list" class="song-list" aria-label="きょくをえらぶ"></div>
-    <footer><span id="song-count"></span> · きょくは うえしたに スクロール <span id="offline-status">Rhythm 3.1</span></footer>
+    <footer><span id="song-count"></span> · きょくは うえしたに スクロール <span id="offline-status">Rhythm 3.2</span></footer>
   </section>
   <section id="game-screen" class="screen game-screen" hidden aria-labelledby="song-title">
     <header class="game-header">
@@ -50,6 +51,7 @@
         <small id="audio-detail">再生ボタンを押して確認します</small>
       </div><div class="sound-help"><strong>きこえないときは</strong><p>iPhoneの音量を上げ、消音モードを解除。Bluetoothの出力先も確認してね。</p><p>「再接続」でも鳴らなければ、SafariでURLを開き直してください。ホーム画面版で鳴らない場合もSafariで試してね。</p><small>端末の消音・実際に聞こえたかどうかは自動判定できません。</small></div></div>
       <div class="dialog-actions"><button id="sound-start" class="primary" type="button" disabled>きこえた！ スタート</button><button id="silent-start" type="button">おとなしで あそぶ</button><button id="sound-back" type="button">もどる</button></div>
+      <details class="audio-diagnostics"><summary>保護者向け：音の診断</summary><pre id="audio-diagnostics"></pre><button id="diagnostics-refresh" type="button">表示を更新</button> <button id="check-update" type="button">新版を確認</button><p>診断は画面内だけに表示し、送信・保存しません。信号が正常でも端末から聞こえない場合があります。再接続で改善しない場合はiOSの更新を確認し、当面はSafariから遊んでください。</p></details>
     </div>
   </section>
   <section id="clear-dialog" class="overlay" role="dialog" aria-modal="true" aria-labelledby="clear-title" hidden>
